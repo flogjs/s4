@@ -1,0 +1,9 @@
+.obj
+*.a
+qjs*
+**/*.so
+run-test
+hello.c
+repl.c
+run-test262
+test_*.c
