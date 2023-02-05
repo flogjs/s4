@@ -949,6 +949,21 @@ struct JSObject {
     } u;
     /* byte sizes: 40/48/72 */
 };
+
+typedef enum JSPromiseStateEnum {
+    JS_PROMISE_PENDING,
+    JS_PROMISE_FULFILLED,
+    JS_PROMISE_REJECTED,
+} JSPromiseStateEnum;
+
+typedef struct JSPromiseData {
+    JSPromiseStateEnum promise_state;
+    /* 0=fulfill, 1=reject, list of JSPromiseReactionData.link */
+    struct list_head promise_reactions[2];
+    BOOL is_handled; /* Note: only useful to debug */
+    JSValue promise_result;
+} JSPromiseData;
+
 enum {
     __JS_ATOM_NULL = JS_ATOM_NULL,
 #define DEF(name, str) JS_ATOM_ ## name,
@@ -18589,7 +18604,27 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 }
             }
             BREAK;
+        CASE(OP_top_level_await):
+          {
+            JSValue promise;
+            promise = sp[-1];
+            JSValue resolving_funcs[2], resolving_funcs1[2];
+            resolving_funcs[0] = JS_UNDEFINED;
+            resolving_funcs[1] = JS_UNDEFINED;
+            int res = perform_promise_then(ctx, promise,
+              (JSValueConst *)resolving_funcs1,
+              (JSValueConst *)resolving_funcs);
+            JS_FreeValue(ctx, resolving_funcs1[0]);
+            JS_FreeValue(ctx, resolving_funcs1[1]);
+            if (res)
+                goto exception;
+            JSPromiseData* s = JS_GetOpaque(promise, JS_CLASS_PROMISE);
 
+            JS_FreeValue(ctx, sp[-1]);
+            sp[-1] = s->promise_result;
+            ret_val = JS_NewInt32(ctx, FUNC_RET_AWAIT);
+            BREAK;
+          }
         CASE(OP_await):
             ret_val = JS_NewInt32(ctx, FUNC_RET_AWAIT);
             goto done_generator;
@@ -25101,15 +25136,15 @@ static __exception int js_parse_unary(JSParseState *s, int parse_flags)
         parse_flags = 0;
         break;
     case TOK_AWAIT:
-        if (!(s->cur_func->func_kind & JS_FUNC_ASYNC))
+        if (!(s->cur_func->func_kind & JS_FUNC_ASYNC) && !s->cur_func->is_global_var)
             return js_parse_error(s, "unexpected 'await' keyword");
-        if (!s->cur_func->in_function_body)
+        if (!s->cur_func->in_function_body && !s->cur_func->is_global_var)
             return js_parse_error(s, "await in default expression");
         if (next_token(s))
             return -1;
         if (js_parse_unary(s, PF_POW_FORBIDDEN))
             return -1;
-        emit_op(s, OP_await);
+        emit_op(s, s->cur_func->is_global_var ? OP_top_level_await : OP_await);
         parse_flags = 0;
         break;
     default:
@@ -46267,20 +46302,6 @@ static const JSCFunctionListEntry js_generator_proto_funcs[] = {
 };
 
 /* Promise */
-
-typedef enum JSPromiseStateEnum {
-    JS_PROMISE_PENDING,
-    JS_PROMISE_FULFILLED,
-    JS_PROMISE_REJECTED,
-} JSPromiseStateEnum;
-
-typedef struct JSPromiseData {
-    JSPromiseStateEnum promise_state;
-    /* 0=fulfill, 1=reject, list of JSPromiseReactionData.link */
-    struct list_head promise_reactions[2];
-    BOOL is_handled; /* Note: only useful to debug */
-    JSValue promise_result;
-} JSPromiseData;
 
 typedef struct JSPromiseFunctionDataResolved {
     int ref_count;
