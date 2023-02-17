@@ -7,3 +7,4 @@ hello.c
 repl.c
 run-test262
 test_*.c
+zig*
