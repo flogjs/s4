@@ -544,6 +544,7 @@ JSValue JS_NewBigUint64(JSContext *ctx, uint64_t v);
 
 static js_force_inline JSValue JS_NewFloat64(JSContext *ctx, double d)
 {
+//    dump_stack_trace();
     JSValue v;
     int32_t val;
     union {

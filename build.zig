@@ -17,14 +17,23 @@ pub fn build(b: *Builder) void {
         "libregexp.c",
         "libunicode.c",
         "quickjs.c",
-    }, &.{
-        "-Wall",
-        "-W",
-        "-Wstrict-prototypes",
-        "-Wwrite-strings",
-        "-Wno-missing-field-initializers",
-    });
+    }, &.{});
     s4.install();
     s4.installHeader("quickjs.h", "s4/quickjs.h");
     s4.installHeader("cutils.h", "s4/cutils.h");
+
+    // to ensure linking works
+    const tester = b.addExecutable(.{
+        .name = "tester",
+        .target = target,
+        .optimize = optimize,
+        .root_source_file = .{ .path = "helper.zig" },
+    });
+    tester.addCSourceFiles(&.{
+        "tester.c",
+    }, &.{});
+    tester.addIncludePath("./s4");
+    tester.linkLibC();
+    tester.linkLibrary(s4);
+    tester.install();
 }
