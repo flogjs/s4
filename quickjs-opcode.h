@@ -216,6 +216,7 @@ DEF(          yield, 1, 1, 2, none)
 DEF(     yield_star, 1, 1, 2, none)
 DEF(async_yield_star, 1, 1, 2, none)
 DEF(          await, 1, 1, 1, none)
+DEF(top_level_await, 1, 1, 1, none)
 
 /* arithmetic/logic operations */
 DEF(            neg, 1, 1, 1, none)
