@@ -18625,7 +18625,10 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
             BREAK;
         CASE(OP_top_level_await):
           {
-            JSValue promise = sp[-1];
+            // create a promise from next value
+            JSValue promise = js_promise_resolve(ctx, ctx->promise_ctor,
+                                 1, &sp[-1], 0);
+/*            JSValue promise = sp[-1];
             JSValue resolving_funcs[2], resolving_funcs1[2];
             resolving_funcs[0] = JS_UNDEFINED;
             resolving_funcs1[0] = JS_UNDEFINED;
@@ -18636,7 +18639,9 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
             JS_FreeValue(ctx, resolving_funcs1[1]);
             if (res) {
               goto exception;
-            }
+            }*/
+            if (JS_IsException(promise))
+                goto exception;
             JSPromiseData* s = JS_GetOpaque(promise, JS_CLASS_PROMISE);
             JS_FreeValue(ctx, sp[-1]);
             sp[-1] = s->promise_result;

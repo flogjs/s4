@@ -59,12 +59,13 @@ int main() {
   JSRuntime* runtime = JS_NewRuntime();
   JSContext* context = JS_NewContext(runtime);
 
-  run_test("using large numbers", "\
-    const t1 = 100000000000000000000000000; \
+  run_test("using large numbers",
+    "const t1 = 100000000000000000000000000; \
     const t2 = 100000000000000000000000000; \
     throw new Error(t1 === t2);", context);
   run_test("typeof", "throw new Error(typeof 1 === 'number');", context);
-  run_test("tla", "throw new Error(await Promise.resolve(1) === 1);", context);
+  run_test("tla",
+    "throw new Error(await 1 + await Promise.resolve(1) === 2);", context);
 
   return 0;
 }
