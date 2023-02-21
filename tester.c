@@ -1,42 +1,39 @@
 #include "cutils.h"
 #include "quickjs.h"
 
-static void show_error(JSContext* context) {
+#define FAIL "\e[1;31m"
+#define PASS "\e[1;32m"
+#define OFF  "\e[m"
+
+void setup_debug_handlers(void);
+
+void test(const char* name, JSContext* context) {
   JSValue exception = JS_GetException(context);
   int is_error = JS_IsError(context, exception);
   if (is_error) {
     JSValue message = JS_GetPropertyStr(context, exception, "message");
     if (!JS_IsUndefined(message)) {
       const char* str = JS_ToCString(context, message);
-      printf("%s\n", str);
+      if (str[0] == 't' && str[1] == 'r' && str[2] == 'u' && str[3] == 'e') {
+        printf("%s "PASS"%s"OFF"\n", name, "passed");
+      } else {
+        printf("%s "FAIL"%s"OFF"\n", name, "failed");
+      }
       JS_FreeCString(context, str);
     }
     JS_FreeValue(context, message);
-    JSValue stack = JS_GetPropertyStr(context, exception, "stack");
-    if (!JS_IsUndefined(stack)) {
-      const char* str = JS_ToCString(context, stack);
-      printf("%s\n", str);
-      JS_FreeCString(context, str);
-    }
-    JS_FreeValue(context, stack);
   }
   JS_FreeValue(context, exception);
 }
 
-void setup_debug_handlers(void);
-
-int main() {
-  setup_debug_handlers();
-  JSRuntime* runtime = JS_NewRuntime();
-  JSContext* context = JS_NewContext(runtime);
-
+void run_test(const char* name, const char* code, JSContext* context) {
   DynBuf dynbuf;
   dbuf_init(&dynbuf);
-  const char* t = "const e = () => { typeof 1; return 10000000000000000; }";
 
-  for (const char *i = t; *i != '\0'; i++) {
+  for (const char *i = code; *i != '\0'; i++) {
     dbuf_putc(&dynbuf, *i);
   }
+
   dbuf_putc(&dynbuf, '\0');
 
   char* buffer = (char*) dynbuf.buf;
@@ -47,16 +44,26 @@ int main() {
   if (!JS_IsException(value)) {
     value = JS_EvalFunction(context, value);
     if (JS_IsException(value)) {
-      show_error(context);
+      test(name, context);
     }
   } else {
-    show_error(context);
-    JS_FreeValue(context, value);
-    return 0;
+    printf("expected eval error");
   }
 
-  JSModuleDef* module_def = JS_VALUE_GET_PTR(value);
+  dbuf_free(&dynbuf);
   JS_FreeValue(context, value);
+}
+
+int main() {
+  setup_debug_handlers();
+  JSRuntime* runtime = JS_NewRuntime();
+  JSContext* context = JS_NewContext(runtime);
+
+  run_test("using large numbers", "\
+    const t1 = 100000000000000000000000000; \
+    const t2 = 100000000000000000000000000; \
+    throw new Error(t1 === t2);", context);
+  run_test("typeof", "throw new Error(typeof 1 === 'number');", context);
 
   return 0;
 }

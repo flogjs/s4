@@ -49,7 +49,9 @@
 #endif
 
 #define OPTIMIZE         1
+#ifndef SHORT_OPCODES
 #define SHORT_OPCODES    1
+#endif
 #if defined(EMSCRIPTEN)
 #define DIRECT_DISPATCH  0
 #else

@@ -17,12 +17,14 @@ pub fn build(b: *Builder) void {
         "libregexp.c",
         "libunicode.c",
         "quickjs.c",
-    }, &.{});
+    }, &.{
+        "-DSHORT_OPCODES=0",
+    });
     s4.install();
     s4.installHeader("quickjs.h", "s4/quickjs.h");
     s4.installHeader("cutils.h", "s4/cutils.h");
 
-    // to ensure linking works
+    // run tests
     const tester = b.addExecutable(.{
         .name = "tester",
         .target = target,

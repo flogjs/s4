@@ -27,6 +27,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <limits.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -544,7 +545,6 @@ JSValue JS_NewBigUint64(JSContext *ctx, uint64_t v);
 
 static js_force_inline JSValue JS_NewFloat64(JSContext *ctx, double d)
 {
-//    dump_stack_trace();
     JSValue v;
     int32_t val;
     union {
@@ -552,6 +552,12 @@ static js_force_inline JSValue JS_NewFloat64(JSContext *ctx, double d)
         uint64_t u;
     } u, t;
     u.d = d;
+
+    // integral part of d is larger than largest int32_t value, return a float
+    if (d > (double)INT_MAX) {
+      return __JS_NewFloat64(ctx, d);
+    }
+    // safe
     val = (int32_t)d;
     t.d = val;
     /* -0 cannot be represented as integer, so we compare the bit
