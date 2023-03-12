@@ -5,6 +5,7 @@ qjs*
 run-test
 hello.c
 repl.c
-run-test262
 test_*.c
 zig*
+test262*
+!test262-runner.c

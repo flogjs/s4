@@ -35,9 +35,9 @@
 #include <dirent.h>
 #include <ftw.h>
 
+#include "quickjs.h"
 #include "cutils.h"
 #include "list.h"
-#include "quickjs-libc.h"
 
 /* enable test262 thread support to test SharedArrayBuffer and Atomics */
 #define CONFIG_AGENT
@@ -85,6 +85,7 @@ int test_count, test_failed, test_index, test_skipped, test_excluded;
 int new_errors, changed_errors, fixed_errors;
 int async_done;
 
+void setup_debug_handlers(void);
 void warning(const char *, ...) __attribute__((__format__(__printf__, 1, 2)));
 void fatal(int, const char *, ...) __attribute__((__format__(__printf__, 2, 3)));
 
@@ -449,6 +450,90 @@ static struct list_head agent_list = LIST_HEAD_INIT(agent_list);
 static pthread_mutex_t report_mutex = PTHREAD_MUTEX_INITIALIZER;
 /* list of AgentReport.link */
 static struct list_head report_list = LIST_HEAD_INIT(report_list);
+
+static void js_dump_obj(JSContext *ctx, FILE *f, JSValueConst val)
+{
+    const char *str;
+    
+    str = JS_ToCString(ctx, val);
+    if (str) {
+        fprintf(f, "%s\n", str);
+        JS_FreeCString(ctx, str);
+    } else {
+        fprintf(f, "[exception]\n");
+    }
+}
+
+static void js_std_dump_error1(JSContext *ctx, JSValueConst exception_val)
+{
+    JSValue val;
+    BOOL is_error;
+    
+    is_error = JS_IsError(ctx, exception_val);
+    js_dump_obj(ctx, stderr, exception_val);
+    if (is_error) {
+        val = JS_GetPropertyStr(ctx, exception_val, "stack");
+        if (!JS_IsUndefined(val)) {
+            js_dump_obj(ctx, stderr, val);
+        }
+        JS_FreeValue(ctx, val);
+    }
+}
+
+static void js_std_dump_error(JSContext *ctx)
+{
+    JSValue exception_val;
+    
+    exception_val = JS_GetException(ctx);
+    js_std_dump_error1(ctx, exception_val);
+    JS_FreeValue(ctx, exception_val);
+}
+
+static uint8_t *js_load_file(JSContext *ctx, size_t *pbuf_len,
+    const char *filename)
+{
+    FILE *f;
+    uint8_t *buf;
+    size_t buf_len;
+    long lret;
+    
+    f = fopen(filename, "rb");
+    if (!f)
+        return NULL;
+    if (fseek(f, 0, SEEK_END) < 0)
+        goto fail;
+    lret = ftell(f);
+    if (lret < 0)
+        goto fail;
+    /* XXX: on Linux, ftell() return LONG_MAX for directories */
+    if (lret == LONG_MAX) {
+        errno = EISDIR;
+        goto fail;
+    }
+    buf_len = lret;
+    if (fseek(f, 0, SEEK_SET) < 0)
+        goto fail;
+    if (ctx)
+        buf = js_malloc(ctx, buf_len + 1);
+    else
+        buf = malloc(buf_len + 1);
+    if (!buf)
+        goto fail;
+    if (fread(buf, 1, buf_len, f) != buf_len) {
+        errno = EIO;
+        if (ctx)
+            js_free(ctx, buf);
+        else
+            free(buf);
+    fail:
+        fclose(f);
+        return NULL;
+    }
+    buf[buf_len] = '\0';
+    fclose(f);
+    *pbuf_len = buf_len;
+    return buf;
+}
 
 static void *agent_start(void *arg)
 {
@@ -1937,6 +2022,7 @@ char *get_opt_arg(const char *option, char *arg)
 
 int main(int argc, char **argv)
 {
+    setup_debug_handlers();
     int optind, start_index, stop_index;
     BOOL is_dir_list;
     BOOL only_check_errors = FALSE;
